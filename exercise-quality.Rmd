@@ -1,0 +1,200 @@
+---
+title: "How Well People Do Excercises"
+author: "nthehai01"
+date: '2022-08-03'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+## Synopsis
+
+One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, our goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants.
+
+To do this, we are going to predict the manner in which they did the exercise, this is the `classe` variable in the training set.
+
+The training and testing data for this project are provided [here](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv) and [here](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv), respectively.
+
+## Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement -- a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, our goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website [here](http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har).
+
+## Data
+
+#### Downloading data
+
+Set up directory for downloading data. The `trainingURL` and `testingURL` variables contain the links to the training and test data, respectively.
+
+```{r}
+dir.create("./data", showWarnings = FALSE)
+
+# data url
+trainingURL <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testingURL <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+# data file destinations
+trainingFile <- "./data/pml-training.csv"
+testingFile <- "./data/pml-testing.csv"
+```
+
+Download the data:
+
+```{r}
+#library(R.utils)
+
+if(!file.exists(trainingFile)) {
+    download.file(trainingURL, trainingFile, method = "curl")
+}
+
+if(!file.exists(testingFile)) {
+    download.file(testingURL, testingFile, method = "curl")
+}
+```
+
+#### Loading the data
+
+```{r}
+trainingData <- read.csv(trainingFile, na.strings=c("NA", "#DIV/0!", ""))
+testingData <- read.csv(testingFile, na.strings=c("NA", "#DIV/0!", ""))
+```
+
+#### Data preprocessing
+
+Let's take a quick look at our data:
+
+```{r}
+head(trainingData)
+```
+
+```{r}
+head(testingData)
+```
+
+Number of rows:
+
+```{r}
+nRows <- nrow(trainingData)
+nRows
+```
+
+The training data set is very sparsely populated. We should find the percentage of NAs in each column and the delete all the column in which the NA percentages greater than 50%.
+
+```{r}
+# find the NA percentage in each column
+naPer <- colSums(is.na(trainingData)) / nRows
+
+# get the columns with the NA percentages less than 50%
+lessNACols <- naPer < 0.5
+
+# filter the data and reject all the columns having the large NA proportion
+trainingData <- trainingData[,lessNACols]
+testingData <- testingData[,lessNACols]
+```
+
+Re-count the number of NA values within each column in the training data and find the columns that have NAs:
+
+```{r}
+# check if a column has NAs
+haveNA <- colSums(is.na(trainingData)) > 0
+
+# get the columns with NAs
+names(trainingData)[haveNA]
+```
+
+Fortunately, there is no column that has NAs.
+
+```{r}
+head(trainingData)
+```
+
+Finally, we will delete some more useless (or irrelevant) columns. These are the first 7 columns which are the user names or time stamps when the user took the exercises.
+
+```{r}
+trainingData <- trainingData[,-c(1:7)]
+testingData <- testingData[,-c(1:7)]
+```
+
+#### Convert the data type of the label column to factor
+
+```{r}
+trainingData$classe = factor(trainingData$classe)
+```
+
+#### Split the data for validation
+
+We will split the training with the ratio of 4:1 which is 4 for the actual training data and 1 for the validation set.
+
+```{r}
+library("caret")
+inTrain <- createDataPartition(y=trainingData$classe, p=0.8, list=FALSE)    
+
+train <- trainingData[inTrain, ]
+val <- trainingData[-inTrain, ]  
+
+dim(train)
+dim(val) 
+```
+
+## Model Training
+
+In this part, I will use 2 types of classifier:
+
+-   Decision tree
+
+-   and Random Forest
+
+#### Decision tree
+
+Fit the model:
+
+```{r}
+library("rpart")
+
+fitDT <- rpart(classe ~ ., data=train, method="class")
+
+```
+
+Predict and evaluate on the `val` set:
+
+```{r}
+predsDT <- predict(fitDT, val, type = "class")
+mean(predsDT == val$classe)
+```
+
+#### Random Forest
+
+Fit the model:
+
+```{r}
+library("randomForest")
+
+set.seed(42)
+fitRF <- randomForest(classe ~ ., data=train, ntree=500)
+```
+
+Predict and evaluate on the `val` set:
+
+```{r}
+predsRF <- predict(fitRF, val)
+mean(predsRF == val$classe)
+```
+
+**Since the Random Forest model did very well on the `val` set. We will use it as the final model to predict 20 test cases in the `testingData` set.**
+
+## Predict the Test cases
+
+```{r}
+submission <- predict(fitRF, testingData)
+submission
+```
+
+## Libraries
+
+Here are the libraries and their versions that I am using in this project:
+
+```{r}
+data.frame(Library = c("caret", "rpart", "randomForest"), 
+          Version = c(packageVersion("caret"), packageVersion("rpart"), packageVersion("randomForest")))
+```

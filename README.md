@@ -1,2 +1,2 @@
 # excercise-quality
-Practical Machine Learning Course Project
+This is the Course Project of [Practical Machine Learning](https://www.coursera.org/learn/practical-machine-learning/) on Coursera.
